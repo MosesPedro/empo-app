@@ -3,32 +3,31 @@ workflows:
     name: Build Unsigned Empo IPA
     instance_type: mac_mini_m2
     max_build_duration: 60
+    environment:
+      vars:
+        HOMEBREW_NO_AUTO_UPDATE: 1
     scripts:
-      - name: Inspect official GitHub prepare action & release workflow
+      - name: Install XcodeGen and hydrate dependencies
         script: |
-          echo "=== prepare-xcode-project ==="
-          cat .github/actions/prepare-xcode-project/action.yml || ls -la .github/actions/prepare-xcode-project/
-          echo "=== release.yml ==="
-          cat .github/workflows/release.yml
-      - name: Install tools and run official project prep
-        script: |
-          brew install xcodegen oven-sh/bun/bun
-          # Fetch ANGLE and cores if scripts are executable
-          [ -f tools/fetch-angle.sh ] && bash tools/fetch-angle.sh || true
-          [ -f cores/cores.sh ] && bash cores/cores.sh || true
-          # Generate Empo.xcodeproj inside ios/Empo/
+          brew install xcodegen
+
+          # Hydrate ANGLE and prebuilt game cores
+          bash tools/fetch-angle.sh
+          bash cores/cores.sh fetch || bash cores/cores.sh || true
+
+          # Create the gitignored Signing.xcconfig from Sideload.xcconfig
+          cp ios/Empo/Sideload.xcconfig ios/Empo/Signing.xcconfig
+
+          # Generate Empo.xcodeproj
           cd ios/Empo
           xcodegen generate
       - name: Build unsigned xcarchive
         script: |
           cd ios/Empo
-          PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -n 1)
-          echo "Building project: $PROJECT"
-          xcodebuild -project "$PROJECT" \
+          xcodebuild -project "Empo.xcodeproj" \
             -scheme "Empo" \
             -configuration Release \
             -sdk iphoneos \
-            -xcconfig "Sideload.xcconfig" \
             -archivePath "$CM_BUILD_DIR/Empo.xcarchive" \
             archive \
             CODE_SIGN_IDENTITY="" \
