@@ -1,4 +1,3 @@
-yaml
 workflows:
   empo-unsigned-ipa:
     name: Build Unsigned Empo IPA
