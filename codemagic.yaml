@@ -4,10 +4,11 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     scripts:
-      - name: Install Bun
+      - name: Install required CLI tools
         script: |
-          brew install oven-sh/bun/bun
+          brew install oven-sh/bun/bun swift-format swiftlint
           bun --version
+          swift-format --version
       - name: Run setup script for cores and dependencies
         script: |
           chmod +x setup.sh
