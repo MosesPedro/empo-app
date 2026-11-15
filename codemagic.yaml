@@ -7,6 +7,18 @@ workflows:
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
     scripts:
+      - name: Check Xcode versions and official release workflow
+        script: |
+          echo "=== Installed Xcode versions ==="
+          ls -d /Applications/Xcode*.app || true
+          echo "=== Official release.yml ==="
+          cat .github/workflows/release.yml || true
+
+          # Select the newest Xcode installed on the machine
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          echo "Selecting newest Xcode: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
       - name: Install build tools and prepare project
         script: |
           brew install xcodegen oven-sh/bun/bun gh
