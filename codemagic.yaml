@@ -7,15 +7,15 @@ workflows:
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
     scripts:
-      - name: Install XcodeGen and hydrate dependencies
+      - name: Install build tools and prepare project
         script: |
-          brew install xcodegen
+          brew install xcodegen oven-sh/bun/bun gh
 
           # Hydrate ANGLE and prebuilt game cores
           bash tools/fetch-angle.sh
           bash cores/cores.sh fetch || bash cores/cores.sh || true
 
-          # Create the gitignored Signing.xcconfig from Sideload.xcconfig
+          # Create Signing.xcconfig from Sideload.xcconfig
           cp ios/Empo/Sideload.xcconfig ios/Empo/Signing.xcconfig
 
           # Generate Empo.xcodeproj
@@ -24,6 +24,7 @@ workflows:
       - name: Build unsigned xcarchive
         script: |
           cd ios/Empo
+          set -o pipefail
           xcodebuild -project "Empo.xcodeproj" \
             -scheme "Empo" \
             -configuration Release \
@@ -32,7 +33,8 @@ workflows:
             archive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$CM_BUILD_DIR/xcodebuild.log" | grep -E "error:|fatal error:|ARCHIVE SUCCEEDED|ARCHIVE FAILED"
       - name: Package .app into valid IPA
         script: |
           mkdir -p "$CM_BUILD_DIR/Payload"
@@ -40,3 +42,4 @@ workflows:
           cd "$CM_BUILD_DIR" && zip -r Empo-unsigned.ipa Payload
     artifacts:
       - build/Empo-unsigned.ipa
+      - build/xcodebuild.log
