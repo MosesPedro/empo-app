@@ -4,18 +4,26 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     scripts:
-      - name: Inspect repo structure and fetch cores if needed
+      - name: Check repo build scripts and iOS project structure
         script: |
-          echo "=== Checking scripts/ and ios/ ==="
+          echo "=== scripts/ ==="
           ls -la scripts/ || true
+          echo "=== cores/ ==="
+          ls -la cores/ || true
+          echo "=== ios/ ==="
           ls -la ios/ || true
-
-          # Automatically run any core/dependency fetch script if present
-          for script_file in scripts/*fetch*.sh scripts/*deps*.sh scripts/*cores*.sh scripts/*download*.sh scripts/*bootstrap*.sh ios/*setup*.sh ios/*deps*.sh; do
-            if [ -f "$script_file" ]; then
-              echo "Running dependency script: $script_file"
-              chmod +x "$script_file"
-              ./"$script_file"
+      - name: Install required CLI tools and run setup
+        script: |
+          brew install oven-sh/bun/bun swift-format swiftlint clang-format shfmt shellcheck
+          chmod +x setup.sh
+          ./setup.sh
+      - name: Download cores if setup script exists in scripts/
+        script: |
+          # Run any dependency/core fetch script if present
+          for s in scripts/*fetch* scripts/*setup* scripts/*deps* scripts/*cores* scripts/*download*; do
+            if [ -f "$s" ]; then
+              echo "Found script: $s"
+              cat "$s"
             fi
           done
       - name: Build unsigned xcarchive
@@ -25,7 +33,6 @@ workflows:
           PROJECT=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
 
           if [ -n "$WORKSPACE" ]; then
-            echo "Building workspace: $WORKSPACE"
             xcodebuild -workspace "$WORKSPACE" \
               -scheme "Empo" \
               -configuration Release \
@@ -36,7 +43,6 @@ workflows:
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGNING_ALLOWED=NO
           else
-            echo "Building project: $PROJECT"
             xcodebuild -project "$PROJECT" \
               -scheme "Empo" \
               -configuration Release \
