@@ -4,13 +4,20 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     scripts:
-      - name: Install required CLI tools
+      - name: Inspect repo structure and fetch cores if needed
         script: |
-          brew install oven-sh/bun/bun swift-format swiftlint clang-format yamllint
-      - name: Run setup script for cores and dependencies
-        script: |
-          chmod +x setup.sh
-          ./setup.sh
+          echo "=== Checking scripts/ and ios/ ==="
+          ls -la scripts/ || true
+          ls -la ios/ || true
+
+          # Automatically run any core/dependency fetch script if present
+          for script_file in scripts/*fetch*.sh scripts/*deps*.sh scripts/*cores*.sh scripts/*download*.sh scripts/*bootstrap*.sh ios/*setup*.sh ios/*deps*.sh; do
+            if [ -f "$script_file" ]; then
+              echo "Running dependency script: $script_file"
+              chmod +x "$script_file"
+              ./"$script_file"
+            fi
+          done
       - name: Build unsigned xcarchive
         script: |
           cd ios
@@ -18,6 +25,7 @@ workflows:
           PROJECT=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
 
           if [ -n "$WORKSPACE" ]; then
+            echo "Building workspace: $WORKSPACE"
             xcodebuild -workspace "$WORKSPACE" \
               -scheme "Empo" \
               -configuration Release \
@@ -28,6 +36,7 @@ workflows:
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGNING_ALLOWED=NO
           else
+            echo "Building project: $PROJECT"
             xcodebuild -project "$PROJECT" \
               -scheme "Empo" \
               -configuration Release \
