@@ -4,35 +4,44 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     scripts:
-      - name: Check repo build scripts and iOS project structure
+      - name: Install XcodeGen and inspect repo files
         script: |
+          brew install xcodegen
           echo "=== scripts/ ==="
           ls -la scripts/ || true
-          echo "=== cores/ ==="
-          ls -la cores/ || true
           echo "=== ios/ ==="
           ls -la ios/ || true
-      - name: Install required CLI tools and run setup
+      - name: Fetch cores and generate Xcode project
         script: |
-          brew install oven-sh/bun/bun swift-format swiftlint clang-format shfmt shellcheck
-          chmod +x setup.sh
-          ./setup.sh
-      - name: Download cores if setup script exists in scripts/
-        script: |
-          # Run any dependency/core fetch script if present
-          for s in scripts/*fetch* scripts/*setup* scripts/*deps* scripts/*cores* scripts/*download*; do
+          # Run any setup, fetch, or project generation scripts if present
+          for script_file in scripts/*.sh ios/*.sh; do
+            if [ -f "$script_file" ]; then
+              echo "Found script: $script_file"
+            fi
+          done
+
+          # Generate .xcodeproj if project.yml exists in root or ios/
+          if [ -f "project.yml" ]; then
+            xcodegen generate
+          elif [ -f "ios/project.yml" ]; then
+            cd ios && xcodegen generate && cd ..
+          fi
+
+          # Run core/dependency download scripts if present
+          for s in scripts/*fetch*.sh scripts/*deps*.sh scripts/*cores*.sh scripts/*download*.sh scripts/*gen*.sh; do
             if [ -f "$s" ]; then
-              echo "Found script: $s"
-              cat "$s"
+              echo "Running $s..."
+              chmod +x "$s"
+              ./"$s"
             fi
           done
       - name: Build unsigned xcarchive
         script: |
-          cd ios
-          WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" | head -n 1)
-          PROJECT=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
+          WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
+          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
 
           if [ -n "$WORKSPACE" ]; then
+            echo "Building workspace: $WORKSPACE"
             xcodebuild -workspace "$WORKSPACE" \
               -scheme "Empo" \
               -configuration Release \
@@ -42,7 +51,8 @@ workflows:
               CODE_SIGN_IDENTITY="" \
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGNING_ALLOWED=NO
-          else
+          elif [ -n "$PROJECT" ]; then
+            echo "Building project: $PROJECT"
             xcodebuild -project "$PROJECT" \
               -scheme "Empo" \
               -configuration Release \
@@ -52,6 +62,10 @@ workflows:
               CODE_SIGN_IDENTITY="" \
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGNING_ALLOWED=NO
+          else
+            echo "ERROR: Could not find .xcworkspace or .xcodeproj anywhere in repository."
+            find . -maxdepth 3
+            exit 1
           fi
       - name: Package .app into valid IPA
         script: |
