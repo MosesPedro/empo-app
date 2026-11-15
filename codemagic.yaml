@@ -4,69 +4,36 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     scripts:
-      - name: Install XcodeGen and inspect repo files
+      - name: Inspect official GitHub prepare action & release workflow
         script: |
-          brew install xcodegen
-          echo "=== scripts/ ==="
-          ls -la scripts/ || true
-          echo "=== ios/ ==="
-          ls -la ios/ || true
-      - name: Fetch cores and generate Xcode project
+          echo "=== prepare-xcode-project ==="
+          cat .github/actions/prepare-xcode-project/action.yml || ls -la .github/actions/prepare-xcode-project/
+          echo "=== release.yml ==="
+          cat .github/workflows/release.yml
+      - name: Install tools and run official project prep
         script: |
-          # Run any setup, fetch, or project generation scripts if present
-          for script_file in scripts/*.sh ios/*.sh; do
-            if [ -f "$script_file" ]; then
-              echo "Found script: $script_file"
-            fi
-          done
-
-          # Generate .xcodeproj if project.yml exists in root or ios/
-          if [ -f "project.yml" ]; then
-            xcodegen generate
-          elif [ -f "ios/project.yml" ]; then
-            cd ios && xcodegen generate && cd ..
-          fi
-
-          # Run core/dependency download scripts if present
-          for s in scripts/*fetch*.sh scripts/*deps*.sh scripts/*cores*.sh scripts/*download*.sh scripts/*gen*.sh; do
-            if [ -f "$s" ]; then
-              echo "Running $s..."
-              chmod +x "$s"
-              ./"$s"
-            fi
-          done
+          brew install xcodegen oven-sh/bun/bun
+          # Fetch ANGLE and cores if scripts are executable
+          [ -f tools/fetch-angle.sh ] && bash tools/fetch-angle.sh || true
+          [ -f cores/cores.sh ] && bash cores/cores.sh || true
+          # Generate Empo.xcodeproj inside ios/Empo/
+          cd ios/Empo
+          xcodegen generate
       - name: Build unsigned xcarchive
         script: |
-          WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
-          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
-
-          if [ -n "$WORKSPACE" ]; then
-            echo "Building workspace: $WORKSPACE"
-            xcodebuild -workspace "$WORKSPACE" \
-              -scheme "Empo" \
-              -configuration Release \
-              -sdk iphoneos \
-              -archivePath "$CM_BUILD_DIR/Empo.xcarchive" \
-              archive \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO
-          elif [ -n "$PROJECT" ]; then
-            echo "Building project: $PROJECT"
-            xcodebuild -project "$PROJECT" \
-              -scheme "Empo" \
-              -configuration Release \
-              -sdk iphoneos \
-              -archivePath "$CM_BUILD_DIR/Empo.xcarchive" \
-              archive \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO
-          else
-            echo "ERROR: Could not find .xcworkspace or .xcodeproj anywhere in repository."
-            find . -maxdepth 3
-            exit 1
-          fi
+          cd ios/Empo
+          PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -n 1)
+          echo "Building project: $PROJECT"
+          xcodebuild -project "$PROJECT" \
+            -scheme "Empo" \
+            -configuration Release \
+            -sdk iphoneos \
+            -xcconfig "Sideload.xcconfig" \
+            -archivePath "$CM_BUILD_DIR/Empo.xcarchive" \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
       - name: Package .app into valid IPA
         script: |
           mkdir -p "$CM_BUILD_DIR/Payload"
