@@ -1,3 +1,4 @@
+yaml
 workflows:
   empo-unsigned-ipa:
     name: Build Unsigned Empo IPA
@@ -6,9 +7,7 @@ workflows:
     scripts:
       - name: Install Bun
         script: |
-          curl -fsSL https://bun.sh | bash
-          sudo ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
-          sudo ln -sf "$HOME/.bun/bin/bunx" /usr/local/bin/bunx
+          brew install oven-sh/bun/bun
           bun --version
       - name: Run setup script for cores and dependencies
         script: |
